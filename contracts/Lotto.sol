@@ -55,8 +55,8 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     //------------------------------ EVENTS ----------------------------------
 
     event LottoCreated(uint256 indexed time, uint256 indexed fee);
-    event EnteredLotto(uint256 indexed raffleId, address indexed player);
-    event RaffleClosed(uint256 indexed raffleId, address[] participants);
+    event EnteredLotto(uint256 indexed lottoId, address indexed player);
+    event LottoClosed(uint256 indexed lottoId, address[] participants);
 
     // ------------------- MODIFIERS -------------------
 
@@ -128,9 +128,9 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
                 1
             );
             randomRequests[requestId] = msg.sender;
-            contestants[lottoCounter.current()].push(
-                Participant({tickets: new Ticket[](0)})
-            );
+            // contestants[lottoCounter.current()].push(
+            //     Participant({tickets: new Ticket[](0)}) // NOT COMPILING
+            // );
             // lottos[lottoCounter.current()].contestants[
             //     msg.sender
             // ] = Participant({tickets: new Ticket[](0)});
@@ -211,7 +211,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             lottos[lottoCounter.current()].timeLength
         ) {
             lottoLive = false;
-            emit RaffleClosed(
+            emit LottoClosed(
                 lottoCounter.current(),
                 lottos[lottoCounter.current()].contestantsAddresses
             );
