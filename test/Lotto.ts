@@ -12,7 +12,10 @@ describe("Lotto", function () {
     callbackGasLimit: any,
     keyHash: any,
     vrfCoordinatorV2Mock: any,
-    lotto: any;
+    lotto: any,
+    linkTokenAddress,
+    vrfCoordinatorMock: any;
+
   beforeEach(async () => {
     const accounts = await ethers.getSigners();
     owner = accounts[0];
@@ -26,8 +29,12 @@ describe("Lotto", function () {
     vrfCoordinatorV2Mock = await ethers.getContractFactory(
       "VRFCoordinatorV2Mock"
     );
+    linkTokenAddress = "0x404460C6A5EdE2D891e8297795264fDe62ADBB75";
+    vrfCoordinatorMock = await deploy("VRFCoordinatorMock", [linkTokenAddress]);
+    subscriptionId =
+      "0x0000000000000000000000000000000000000000000000000000000000000000";
     lotto = await deploy("Lotto", [
-      vrfCoordinator,
+      vrfCoordinatorMock.address,
       subscriptionId,
       requestConfirmations,
       callbackGasLimit,
@@ -49,8 +56,13 @@ describe("Lotto", function () {
       ).to.be.revertedWith("Lotto is not live");
     });
     it("Should enter lotto", async function () {
-      const e = await lotto.enterLotto();
-      expect(e.length).to.equal(0);
+      await expect(lotto.createLotto(100000, 10, false)).to.emit(
+        lotto,
+        "LottoCreated"
+      );
+      await expect(
+        lotto.enterLotto({ numbers: [], requestId: 0 }, false, { value: 1000 })
+      ).to.emit(lotto, "EnteredLotto");
     });
   });
 
@@ -89,6 +101,25 @@ describe("Lotto", function () {
     });
     it("can recieve random numbers", async () => {
       await expect(lotto.performUpkeep("0x")).to.emit(lotto, "LottoClosed");
+    });
+  });
+
+  describe("getRandomNumber", function () {
+    it("returns a random number", async () => {
+      await lotto.createLotto(100000, 10, false);
+      const tx = await lotto.enterLotto({ numbers: [], requestId: 0 }, false, {
+        value: 1000,
+      });
+      const txReceipt = await tx.wait(1);
+      console.log(txReceipt);
+      const x = await vrfCoordinatorMock.callBackWithRandomness(
+        keyHash,
+        5,
+        lotto.address
+      );
+      console.log(x);
+      const l = await lotto.lotto();
+      console.log(l.lottoStaged);
     });
   });
 });

@@ -12,7 +12,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     VRFCoordinatorV2Interface COORDINATOR;
     address public owner;
     Counters.Counter public lottoCounter;
-    mapping(uint256 => LottoInstance) public lottos;
+    LottoInstance public lotto;
     mapping(uint256 => address) private randomRequests;
     mapping(uint256 => Participant[]) private contestants;
     bool public lottoLive;
@@ -105,7 +105,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             untilWon: _untilWon
         });
 
-        lottos[lottoCounter.current()] = newLotto;
+        lotto = newLotto;
         lottoLive = true;
         emit LottoCreated(_timeLength, _fee);
     }
@@ -116,7 +116,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     {
         require(lottoLive == true, "Lotto is not live");
         require(
-            msg.value >= lottos[lottoCounter.current()].fee,
+            msg.value >= lotto.fee,
             "You need to pay the fee to enter the lotto"
         );
         if (_randomPick) {
@@ -139,7 +139,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             //     );
         }
 
-        lottos[lottoCounter.current()].prizeWorth += msg.value;
+        lotto.prizeWorth += msg.value;
         emit EnteredLotto(lottoCounter.current(), msg.sender);
     }
 
@@ -149,10 +149,11 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     {
         if (randomWords.length > 1) {
             uint256 randomSeed = randomWords[0];
-            lottos[lottoCounter.current()].lottoStaged = true;
+            lotto.lottoStaged = true;
         } else {
             uint256 randomNumber = randomWords[0];
             address a = randomRequests[requestId];
+            lotto.lottoStaged = true;
             // lottos[lottoCounter.current()]
             //     .contestants[a]
             //     .tickets[0]
@@ -195,8 +196,8 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             upkeepNeeded = false;
         } else {
             upkeepNeeded =
-                (block.timestamp - lottos[lottoCounter.current()].startDate) >
-                lottos[lottoCounter.current()].timeLength;
+                (block.timestamp - lotto.startDate) >
+                lotto.timeLength;
         }
     }
 
@@ -207,13 +208,13 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             return;
         }
         if (
-            (block.timestamp - lottos[lottoCounter.current()].startDate) >
-            lottos[lottoCounter.current()].timeLength
+            (block.timestamp - lotto.startDate) >
+            lotto.timeLength
         ) {
             lottoLive = false;
             emit LottoClosed(
                 lottoCounter.current(),
-                lottos[lottoCounter.current()].contestantsAddresses
+                lotto.contestantsAddresses
             );
             pickWinner();
         }
