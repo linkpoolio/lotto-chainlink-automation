@@ -12,23 +12,25 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     VRFCoordinatorV2Interface COORDINATOR;
     address public owner;
     Counters.Counter public lottoCounter;
-    mapping(uint256 => LottoInstance) public lottos;
+    LottoInstance public lotto;
     mapping(uint256 => address) private randomRequests;
     mapping(uint256 => Participant[]) private contestants;
     bool public lottoLive;
     RequestConfig public requestConfig;
+    address payable[] s_players;
+    mapping(address => uint8[]) private s_tickets;
+    mapping(uint256 => mapping(uint8 => bool)) winningMap;
 
     // ------------------- STRUCTS -------------------
 
     struct LottoInstance {
         address[] contestantsAddresses;
-        uint256[] winners;
+        address[] winners;
         uint256 startDate;
         bool lottoDone;
         uint256 prizeWorth;
         uint256 randomSeed;
         bool lottoStaged;
-        string provenanceHash;
         address lottoOwner;
         uint256 timeLength;
         uint256 fee;
@@ -55,8 +57,8 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     //------------------------------ EVENTS ----------------------------------
 
     event LottoCreated(uint256 indexed time, uint256 indexed fee);
-    event EnteredLotto(uint256 indexed lottoId, address indexed player);
-    event LottoClosed(uint256 indexed lottoId, address[] participants);
+    event LottoEnter(address indexed player);
+    event LottoClosed(address[] participants);
 
     // ------------------- MODIFIERS -------------------
 
@@ -92,34 +94,30 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
 
         LottoInstance memory newLotto = LottoInstance({
             contestantsAddresses: new address[](0),
-            winners: new uint256[](0),
+            winners: new address[](0),
             startDate: block.timestamp,
             lottoDone: false,
             prizeWorth: 0,
             randomSeed: 0,
             lottoStaged: false,
-            provenanceHash: "",
             lottoOwner: msg.sender,
             timeLength: _timeLength,
             fee: _fee,
             untilWon: _untilWon
         });
 
-        lottos[lottoCounter.current()] = newLotto;
+        lotto = newLotto;
         lottoLive = true;
         emit LottoCreated(_timeLength, _fee);
     }
 
-    function enterLotto(Ticket memory _ticket, bool _randomPick)
-        external
-        payable
-    {
+    function enterLotto(uint8[] memory numbers) external payable {
         require(lottoLive == true, "Lotto is not live");
         require(
-            msg.value >= lottos[lottoCounter.current()].fee,
+            msg.value >= lotto.fee,
             "You need to pay the fee to enter the lotto"
         );
-        if (_randomPick) {
+        if (numbers.length == 0) {
             uint256 requestId = COORDINATOR.requestRandomWords(
                 requestConfig.keyHash,
                 requestConfig.subscriptionId,
@@ -128,57 +126,73 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
                 1
             );
             randomRequests[requestId] = msg.sender;
-            // contestants[lottoCounter.current()].push(
-            //     Participant({tickets: new Ticket[](0)}) // NOT COMPILING
-            // );
-            // lottos[lottoCounter.current()].contestants[
-            //     msg.sender
-            // ] = Participant({tickets: new Ticket[](0)});
-            // lottos[lottoCounter.current()].contestants[msg.sender].tickets.push(
-            //         Ticket({numbers: new uint256[](0), requestId: requestId})
-            //     );
+            s_players.push(payable(msg.sender));
+        } else {
+            for (uint256 i = 0; i < numbers.length; i++) {
+                require(numbers[i] <= 100, "Number must be between 1 and 100");
+            }
+            s_players.push(payable(msg.sender));
+            s_tickets[msg.sender] = numbers;
         }
-
-        lottos[lottoCounter.current()].prizeWorth += msg.value;
-        emit EnteredLotto(lottoCounter.current(), msg.sender);
+        lotto.prizeWorth += msg.value;
+        emit LottoEnter(msg.sender);
     }
 
     function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords)
         internal
         override
     {
-        if (randomWords.length > 1) {
-            uint256 randomSeed = randomWords[0];
-            lottos[lottoCounter.current()].lottoStaged = true;
-        } else {
-            uint256 randomNumber = randomWords[0];
+        uint256 randomNumber = randomWords[0];
+        if (lottoLive) {
             address a = randomRequests[requestId];
-            // lottos[lottoCounter.current()]
-            //     .contestants[a]
-            //     .tickets[0]
-            //     .numbers
-            //     .push(randomNumber);
+            s_tickets[a] = createRandom(randomNumber, 6);
+        } else {
+            uint8[] memory winningNumbers = createRandom(randomNumber, 6);
+            for (uint256 i = 0; i < winningNumbers.length; i++) {
+                winningMap[lottoCounter.current()][winningNumbers[i]] = true;
+            }
+            for (uint256 i = 0; i < s_players.length; i++) {
+                address payable player = s_players[i];
+                uint8[] memory playerNumbers = s_tickets[player];
+                for (uint8 j = 0; j < playerNumbers.length; j++) {
+                    if (!winningMap[lottoCounter.current()][playerNumbers[j]]) {
+                        continue;
+                    }
+                    lotto.winners.push(player);
+                }
+            }
+            if (lotto.winners.length > 0) {
+                uint256 prize = lotto.prizeWorth / lotto.winners.length;
+                for (uint256 i = 0; i < lotto.winners.length; i++) {
+                    address payable winner = payable(lotto.winners[i]);
+                    winner.transfer(prize);
+                }
+            }
         }
-        // uint256 randomSeed = randomWords[0];
-        // uint256 raffleIndexFromRequestId = requestIdToRaffleIndex[requestId];
-        // raffles[raffleIndexFromRequestId].randomSeed = randomWords[0];
-
-        // stagedLotto.push(raffleIndexFromRequestId);
     }
 
-    function createRange(uint256 _max)
-        internal
+    function createRandom(uint256 randomValue, uint256 n)
+        public
         pure
-        returns (uint256[] memory)
+        returns (uint8[] memory expandedValues)
     {
-        uint256[] memory range = new uint256[](_max);
-        for (uint256 i = 0; i < _max; i++) {
-            range[i] = i;
+        expandedValues = new uint8[](n);
+        for (uint256 i = 0; i < n; i++) {
+            uint256 v = uint256(keccak256(abi.encode(randomValue, i)));
+            expandedValues[i] = uint8(v % 100) + 1;
         }
-        return range;
+        return expandedValues;
     }
 
-    function pickWinner() internal {}
+    function pickWinner() internal {
+        uint256 requestId = COORDINATOR.requestRandomWords(
+            requestConfig.keyHash,
+            requestConfig.subscriptionId,
+            requestConfig.requestConfirmations,
+            requestConfig.callbackGasLimit,
+            1
+        );
+    }
 
     function checkUpkeep(
         bytes calldata /* checkData */
@@ -195,8 +209,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             upkeepNeeded = false;
         } else {
             upkeepNeeded =
-                (block.timestamp - lottos[lottoCounter.current()].startDate) >
-                lottos[lottoCounter.current()].timeLength;
+                (block.timestamp - lotto.startDate) > lotto.timeLength;
         }
     }
 
@@ -206,15 +219,13 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
         if (!lottoLive) {
             return;
         }
-        if (
-            (block.timestamp - lottos[lottoCounter.current()].startDate) >
-            lottos[lottoCounter.current()].timeLength
-        ) {
+        if ((block.timestamp - lotto.startDate) > lotto.timeLength) {
             lottoLive = false;
-            emit LottoClosed(
-                lottoCounter.current(),
-                lottos[lottoCounter.current()].contestantsAddresses
-            );
+            address[] memory players = new address[](s_players.length);
+            for (uint256 i = 0; i < s_players.length; i++) {
+                players[i] = s_players[i];
+            }
+            emit LottoClosed(players);
             pickWinner();
         }
     }
