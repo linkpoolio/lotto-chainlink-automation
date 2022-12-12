@@ -11,28 +11,32 @@ describe("Lotto", function () {
     callbackGasLimit: any,
     keyHash: any,
     linkTokenAddress,
-    vrfCoordinatorV2Mock: any,
-    vrfCoordinator: any;
+    vrfCoordinatorV2Mock: any;
   let lotto: any;
   beforeEach(async () => {
     const accounts = await ethers.getSigners();
     owner = accounts[0];
+    const BASE_FEE = "250000000000000000";
+    const GAS_PRICE_LINK = 1e9;
     keyHash =
       "0x79d3d8832d904592c0bf9818b621522c988bb8b0c05cdc3b15aea1b6e8db0c15";
     callbackGasLimit = 100000;
     requestConfirmations = 3;
-    vrfCoordinator = "0x3d2341ADb2D31f1c5530cDC622016af293177AE0";
-    subscriptionId =
-      "0x0000000000000000000000000000000000000000000000000000000000000000";
-    vrfCoordinatorV2Mock = await ethers.getContractFactory(
-      "VRFCoordinatorV2Mock"
+    vrfCoordinatorV2Mock = await deploy("VRFCoordinatorV2Mock", [
+      BASE_FEE,
+      GAS_PRICE_LINK,
+    ]);
+    const tx = await vrfCoordinatorV2Mock.createSubscription();
+    let txReceipt = await tx.wait(1);
+    subscriptionId = txReceipt.events[0].args.subId;
+    const tx2 = await vrfCoordinatorV2Mock.fundSubscription(
+      subscriptionId.toNumber(),
+      ethers.utils.parseEther("1")
     );
+    txReceipt = await tx2.wait(1);
     linkTokenAddress = "0x404460C6A5EdE2D891e8297795264fDe62ADBB75";
-    // vrfCoordinatorV2Mock = await deploy("VRFCoordinatorV2Mock");
-    subscriptionId =
-      "0x0000000000000000000000000000000000000000000000000000000000000000";
     lotto = await deploy("Lotto", [
-      linkTokenAddress,
+      vrfCoordinatorV2Mock.address,
       subscriptionId,
       requestConfirmations,
       callbackGasLimit,
@@ -44,6 +48,7 @@ describe("Lotto", function () {
     it("sets requestConfig", async () => {
       const rc = await lotto.requestConfig();
       assert.equal(rc[4], keyHash);
+      assert.equal(rc[0], subscriptionId.toNumber());
     });
   });
 
@@ -53,15 +58,32 @@ describe("Lotto", function () {
         "Lotto is not live"
       );
     });
-    it("Should enter lotto", async function () {
+    it("Should revert, not enough numbers to enter", async function () {
       await expect(lotto.createLotto(100000, 10, false)).to.emit(
         lotto,
         "LottoCreated"
       );
-      await expect(lotto.enterLotto([], { value: 1000 })).to.emit(
+      await expect(
+        lotto.enterLotto([1, 1, 1, 1, 1], { value: 1000 })
+      ).to.be.revertedWith("not enough numbers");
+    });
+    it("Should revert, numbers not lower than 100", async function () {
+      await expect(lotto.createLotto(100000, 10, false)).to.emit(
         lotto,
-        "LottoEnter"
+        "LottoCreated"
       );
+      await expect(
+        lotto.enterLotto([1, 1, 1, 1, 1, 101], { value: 1000 })
+      ).to.be.revertedWith("Number must be between 1 and 100");
+    });
+    it("Should enter with user picked numbers", async function () {
+      await expect(lotto.createLotto(100000, 10, false)).to.emit(
+        lotto,
+        "LottoCreated"
+      );
+      await expect(
+        lotto.enterLotto([1, 1, 1, 1, 1, 1], { value: 1000 })
+      ).to.emit(lotto, "LottoEnter");
     });
   });
 
@@ -82,6 +104,9 @@ describe("Lotto", function () {
       assert(tx);
     });
     it("emits correct event on performUpkeep", async () => {
+      await lotto.createLotto(100000, 10, false);
+      await network.provider.send("evm_increaseTime", [100000000]);
+      await network.provider.request({ method: "evm_mine", params: [] });
       await expect(lotto.performUpkeep("0x")).to.emit(lotto, "LottoClosed");
     });
   });
@@ -93,27 +118,42 @@ describe("Lotto", function () {
       const tx = await lotto.performUpkeep("0x");
       assert(tx);
     });
-    it("can recieve random numbers", async () => {
-      await expect(lotto.performUpkeep("0x")).to.emit(lotto, "LottoClosed");
+    it("can create subscription", async () => {
+      await expect(vrfCoordinatorV2Mock.createSubscription()).to.emit(
+        vrfCoordinatorV2Mock,
+        "SubscriptionCreated"
+      );
+    });
+    it("can get random words", async () => {
+      await expect(
+        vrfCoordinatorV2Mock.requestRandomWords(
+          keyHash,
+          subscriptionId,
+          requestConfirmations,
+          callbackGasLimit,
+          1
+        )
+      ).to.emit(vrfCoordinatorV2Mock, "RandomWordsRequested");
     });
   });
 
-  describe("getRandomNumber", function () {
-    // it("returns a random number", async () => {
-    //   await lotto.createLotto(100000, 10, false);
-    //   const tx = await lotto.enterLotto({ numbers: [], requestId: 0 }, false, {
-    //     value: 1000,
-    //   });
-    //   const txReceipt = await tx.wait(1);
-    //   console.log(txReceipt);
-    //   const x = await vrfCoordinatorV2Mock.callBackWithRandomness(
-    //     keyHash,
-    //     5,
-    //     lotto.address
-    //   );
-    //   console.log(x);
-    //   const l = await lotto.lotto();
-    //   console.log(l.lottoStaged);
-    // });
+  describe("fulfillRandomWords", function () {
+    it("can only be called after performupkeep", async () => {
+      await expect(
+        vrfCoordinatorV2Mock.fulfillRandomWords(0, lotto.address) // reverts if not fulfilled
+      ).to.be.revertedWith("nonexistent request");
+      await expect(
+        vrfCoordinatorV2Mock.fulfillRandomWords(1, lotto.address) // reverts if not fulfilled
+      ).to.be.revertedWith("nonexistent request");
+    });
+
+    it("runs vrf after lotto is done", async () => {
+      await lotto.createLotto(100000, 10, false);
+      await network.provider.send("evm_increaseTime", [100000000]);
+      await network.provider.request({ method: "evm_mine", params: [] });
+      const tx = await lotto.performUpkeep("0x");
+      const txReceipt = await tx.wait(1);
+      console.log(txReceipt);
+    });
   });
 });

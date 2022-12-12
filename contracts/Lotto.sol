@@ -59,6 +59,9 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     event LottoCreated(uint256 indexed time, uint256 indexed fee);
     event LottoEnter(address indexed player);
     event LottoClosed(address[] participants);
+    event RequestedLottoNumbers(uint256 indexed requestId);
+    event WinningLotteryNumbers(uint8[] numbers);
+    event LotteryWinners(address[] winners);
 
     // ------------------- MODIFIERS -------------------
 
@@ -112,7 +115,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     }
 
     function enterLotto(uint8[] memory numbers) external payable {
-        require(lottoLive == true, "Lotto is not live");
+        require(lottoLive, "Lotto is not live");
         require(
             msg.value >= lotto.fee,
             "You need to pay the fee to enter the lotto"
@@ -128,6 +131,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             randomRequests[requestId] = msg.sender;
             s_players.push(payable(msg.sender));
         } else {
+            require(numbers.length == 6, "not enough numbers");
             for (uint256 i = 0; i < numbers.length; i++) {
                 require(numbers[i] <= 100, "Number must be between 1 and 100");
             }
@@ -151,6 +155,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             for (uint256 i = 0; i < winningNumbers.length; i++) {
                 winningMap[lottoCounter.current()][winningNumbers[i]] = true;
             }
+            emit WinningLotteryNumbers(winningNumbers);
             for (uint256 i = 0; i < s_players.length; i++) {
                 address payable player = s_players[i];
                 uint8[] memory playerNumbers = s_tickets[player];
@@ -167,6 +172,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
                     address payable winner = payable(lotto.winners[i]);
                     winner.transfer(prize);
                 }
+                emit LotteryWinners(lotto.winners);
             }
         }
     }
@@ -192,6 +198,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             requestConfig.callbackGasLimit,
             1
         );
+        emit RequestedLottoNumbers(requestId);
     }
 
     function checkUpkeep(
