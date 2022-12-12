@@ -5,32 +5,34 @@ import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     using Counters for Counters.Counter;
     VRFCoordinatorV2Interface COORDINATOR;
-    address public owner;
     Counters.Counter public lottoCounter;
     LottoInstance public lotto;
-    mapping(uint256 => address) private randomRequests;
-    mapping(uint256 => Participant[]) private contestants;
-    bool public lottoLive;
     RequestConfig public requestConfig;
+    address public owner;
     address payable[] s_players;
+    mapping(uint256 => address) private randomRequests;
     mapping(address => uint8[]) private s_tickets;
     mapping(uint256 => mapping(uint8 => bool)) winningMap;
 
     // ------------------- STRUCTS -------------------
 
+    enum LottoState {
+        STAGED,
+        LIVE,
+        FINISHED
+    }
+
     struct LottoInstance {
         address[] contestantsAddresses;
         address[] winners;
         uint256 startDate;
-        bool lottoDone;
+        LottoState lottoState;
         uint256 prizeWorth;
-        uint256 randomSeed;
-        bool lottoStaged;
         address lottoOwner;
         uint256 timeLength;
         uint256 fee;
@@ -58,10 +60,13 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
 
     event LottoCreated(uint256 indexed time, uint256 indexed fee);
     event LottoEnter(address indexed player);
-    event LottoClosed(address[] participants);
+    event LottoStaged(address[] participants);
     event RequestedLottoNumbers(uint256 indexed requestId);
     event WinningLotteryNumbers(uint8[] numbers);
     event LotteryWinners(address[] winners);
+
+    // ------------------- ERRORS -------------------
+    error LottoNotLive();
 
     // ------------------- MODIFIERS -------------------
 
@@ -99,10 +104,8 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             contestantsAddresses: new address[](0),
             winners: new address[](0),
             startDate: block.timestamp,
-            lottoDone: false,
+            lottoState: LottoState.LIVE,
             prizeWorth: 0,
-            randomSeed: 0,
-            lottoStaged: false,
             lottoOwner: msg.sender,
             timeLength: _timeLength,
             fee: _fee,
@@ -110,12 +113,13 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
         });
 
         lotto = newLotto;
-        lottoLive = true;
         emit LottoCreated(_timeLength, _fee);
     }
 
     function enterLotto(uint8[] memory numbers) external payable {
-        require(lottoLive, "Lotto is not live");
+        if (lotto.lottoState != LottoState.LIVE) {
+            revert LottoNotLive();
+        }
         require(
             msg.value >= lotto.fee,
             "You need to pay the fee to enter the lotto"
@@ -136,9 +140,10 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
                 require(numbers[i] <= 100, "Number must be between 1 and 100");
             }
             s_players.push(payable(msg.sender));
-            s_tickets[msg.sender] = numbers;
+            s_tickets[msg.sender] = _sortArray(numbers);
         }
         lotto.prizeWorth += msg.value;
+        lotto.contestantsAddresses.push(msg.sender);
         emit LottoEnter(msg.sender);
     }
 
@@ -147,23 +152,23 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
         override
     {
         uint256 randomNumber = randomWords[0];
-        if (lottoLive) {
+        if (lotto.lottoState == LottoState.LIVE) {
             address a = randomRequests[requestId];
-            s_tickets[a] = createRandom(randomNumber, 6);
+            s_tickets[a] = _sortArray(_createRandom(randomNumber, 6));
         } else {
-            uint8[] memory winningNumbers = createRandom(randomNumber, 6);
-            for (uint256 i = 0; i < winningNumbers.length; i++) {
-                winningMap[lottoCounter.current()][winningNumbers[i]] = true;
-            }
+            uint8[] memory winningNumbers = _createRandom(randomNumber, 6);
             emit WinningLotteryNumbers(winningNumbers);
+            uint8[] memory sortedWinningNumbers = _sortArray(winningNumbers);
             for (uint256 i = 0; i < s_players.length; i++) {
                 address payable player = s_players[i];
                 uint8[] memory playerNumbers = s_tickets[player];
                 for (uint8 j = 0; j < playerNumbers.length; j++) {
-                    if (!winningMap[lottoCounter.current()][playerNumbers[j]]) {
+                    if (playerNumbers[j] != sortedWinningNumbers[j]) {
                         continue;
                     }
-                    lotto.winners.push(player);
+                    if (j == s_players.length) {
+                        lotto.winners.push(player);
+                    }
                 }
             }
             if (lotto.winners.length > 0) {
@@ -172,13 +177,21 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
                     address payable winner = payable(lotto.winners[i]);
                     winner.transfer(prize);
                 }
+                lotto.lottoState = LottoState.FINISHED;
                 emit LotteryWinners(lotto.winners);
+            } else {
+                lotto.lottoState = LottoState.LIVE;
+                lotto.startDate = block.timestamp;
             }
         }
     }
 
-    function createRandom(uint256 randomValue, uint256 n)
-        public
+    function getWinners() external view returns (address[] memory) {
+        return lotto.winners;
+    }
+
+    function _createRandom(uint256 randomValue, uint256 n)
+        internal
         pure
         returns (uint8[] memory expandedValues)
     {
@@ -188,6 +201,23 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             expandedValues[i] = uint8(v % 100) + 1;
         }
         return expandedValues;
+    }
+
+    function _sortArray(uint8[] memory arr)
+        internal
+        pure
+        returns (uint8[] memory)
+    {
+        for (uint256 i = 0; i < arr.length; i++) {
+            for (uint256 j = i + 1; j < arr.length; j++) {
+                if (arr[i] > arr[j]) {
+                    uint8 temp = arr[i];
+                    arr[i] = arr[j];
+                    arr[j] = temp;
+                }
+            }
+        }
+        return arr;
     }
 
     function pickWinner() internal {
@@ -212,7 +242,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             bytes memory /* performData */
         )
     {
-        if (!lottoLive) {
+        if (lotto.lottoState != LottoState.LIVE) {
             upkeepNeeded = false;
         } else {
             upkeepNeeded =
@@ -223,16 +253,16 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     function performUpkeep(
         bytes calldata /* performData */
     ) external override {
-        if (!lottoLive) {
+        if (lotto.lottoState != LottoState.LIVE) {
             return;
         }
         if ((block.timestamp - lotto.startDate) > lotto.timeLength) {
-            lottoLive = false;
+            lotto.lottoState = LottoState.STAGED;
             address[] memory players = new address[](s_players.length);
             for (uint256 i = 0; i < s_players.length; i++) {
                 players[i] = s_players[i];
             }
-            emit LottoClosed(players);
+            emit LottoStaged(players);
             pickWinner();
         }
     }

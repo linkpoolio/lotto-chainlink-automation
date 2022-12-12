@@ -9,7 +9,7 @@ const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   networks: {
     hardhat: {
-      // comment out forking to run tests on a local chain
+      gas: 30000000,
       // forking: {
       //   url: MAINNET_RPC_URL,
       // },
