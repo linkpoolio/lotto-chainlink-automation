@@ -4,7 +4,8 @@ import "@chainlink/contracts/src/v0.8/AutomationCompatible.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "hardhat/console.sol";
+
+// import "hardhat/console.sol";
 
 /**
  * @title Lotto
@@ -18,10 +19,9 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     LottoInstance public lotto;
     RequestConfig public requestConfig;
     address public owner;
-    address payable[] s_players;
+    address payable[] players;
     mapping(uint256 => address) private randomRequests;
-    mapping(address => uint8[]) private s_tickets;
-    mapping(uint256 => mapping(uint8 => bool)) winningMap;
+    mapping(address => uint8[]) private tickets;
 
     // ------------------- STRUCTS -------------------
 
@@ -99,14 +99,14 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
 
     /**
      * @notice creates new lottery
-     * @param _timeLength length of the lottery
-     * @param _fee fee to enter the lottery
-     * @param _untilWon if the lottery will be finished when a winner is found
+     * @param timeLength length of the lottery
+     * @param fee fee to enter the lottery
+     * @param untilWon if the lottery will be finished when a winner is found
      **/
     function createLotto(
-        uint256 _timeLength,
-        uint256 _fee,
-        bool _untilWon
+        uint256 timeLength,
+        uint256 fee,
+        bool untilWon
     ) external onlyOwner {
         lottoCounter.increment();
 
@@ -117,21 +117,21 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             lottoState: LottoState.LIVE,
             prizeWorth: 0,
             lottoOwner: msg.sender,
-            timeLength: _timeLength,
-            fee: _fee,
-            untilWon: _untilWon
+            timeLength: timeLength,
+            fee: fee,
+            untilWon: untilWon
         });
 
         lotto = newLotto;
-        emit LottoCreated(_timeLength, _fee);
+        emit LottoCreated(timeLength, fee);
     }
 
     /**
      * @notice withdraws rewards for an account
-     * @param _numbers numbers chosen by the player
+     * @param numbers numbers chosen by the player
      * @dev empty array will trigger a random number generation
      **/
-    function enterLotto(uint8[] memory _numbers) external payable {
+    function enterLotto(uint8[] memory numbers) external payable {
         if (lotto.lottoState != LottoState.LIVE) {
             revert LottoNotLive();
         }
@@ -139,7 +139,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             msg.value >= lotto.fee,
             "You need to pay the fee to enter the lotto"
         );
-        if (_numbers.length == 0) {
+        if (numbers.length == 0) {
             uint256 requestId = COORDINATOR.requestRandomWords(
                 requestConfig.keyHash,
                 requestConfig.subscriptionId,
@@ -148,14 +148,14 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
                 1
             );
             randomRequests[requestId] = msg.sender;
-            s_players.push(payable(msg.sender));
+            players.push(payable(msg.sender));
         } else {
-            require(_numbers.length == 6, "not enough numbers");
-            for (uint256 i = 0; i < _numbers.length; i++) {
-                require(_numbers[i] <= 100, "Number must be between 1 and 100");
+            require(numbers.length == 6, "not enough numbers");
+            for (uint256 i = 0; i < numbers.length; i++) {
+                require(numbers[i] <= 100, "Number must be between 1 and 100");
             }
-            s_players.push(payable(msg.sender));
-            s_tickets[msg.sender] = _sortArray(_numbers);
+            players.push(payable(msg.sender));
+            tickets[msg.sender] = _sortArray(numbers);
         }
         lotto.prizeWorth += msg.value;
         lotto.contestantsAddresses.push(msg.sender);
@@ -174,19 +174,19 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
         uint256 randomNumber = randomWords[0];
         if (lotto.lottoState == LottoState.LIVE) {
             address a = randomRequests[requestId];
-            s_tickets[a] = _sortArray(_createRandom(randomNumber, 6));
+            tickets[a] = _sortArray(_createRandom(randomNumber, 6));
         } else {
             uint8[] memory winningNumbers = _createRandom(randomNumber, 6);
             emit WinningLotteryNumbers(winningNumbers);
             uint8[] memory sortedWinningNumbers = _sortArray(winningNumbers);
-            for (uint256 i = 0; i < s_players.length; i++) {
-                address payable player = s_players[i];
-                uint8[] memory playerNumbers = s_tickets[player];
+            for (uint256 i = 0; i < players.length; i++) {
+                address payable player = players[i];
+                uint8[] memory playerNumbers = tickets[player];
                 for (uint8 j = 0; j < playerNumbers.length; j++) {
                     if (playerNumbers[j] != sortedWinningNumbers[j]) {
                         continue;
                     }
-                    if (j == s_players.length) {
+                    if (j == players.length) {
                         lotto.winners.push(player);
                     }
                 }
@@ -215,17 +215,17 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
 
     /**
      * @notice withdraws rewards for an account
-     * @param _randomValue random value generated by VRF
-     * @param _n amount of numbers to generate
+     * @param randomValue random value generated by VRF
+     * @param amount amount of numbers to generate
      **/
-    function _createRandom(uint256 _randomValue, uint256 _n)
+    function _createRandom(uint256 randomValue, uint256 amount)
         internal
         pure
         returns (uint8[] memory expandedValues)
     {
-        expandedValues = new uint8[](_n);
-        for (uint256 i = 0; i < _n; i++) {
-            uint256 v = uint256(keccak256(abi.encode(_randomValue, i)));
+        expandedValues = new uint8[](amount);
+        for (uint256 i = 0; i < amount; i++) {
+            uint256 v = uint256(keccak256(abi.encode(randomValue, i)));
             expandedValues[i] = uint8(v % 100) + 1;
         }
         return expandedValues;
@@ -233,24 +233,24 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
 
     /**
      * @notice sorts array of numbers
-     * @param _arr sorts list of numbers
+     * @param arr sorts list of numbers
      * @dev used to pick winner with less state changes
      **/
-    function _sortArray(uint8[] memory _arr)
+    function _sortArray(uint8[] memory arr)
         internal
         pure
         returns (uint8[] memory)
     {
-        for (uint256 i = 0; i < _arr.length; i++) {
-            for (uint256 j = i + 1; j < _arr.length; j++) {
-                if (_arr[i] > _arr[j]) {
-                    uint8 temp = _arr[i];
-                    _arr[i] = _arr[j];
-                    _arr[j] = temp;
+        for (uint256 i = 0; i < arr.length; i++) {
+            for (uint256 j = i + 1; j < arr.length; j++) {
+                if (arr[i] > arr[j]) {
+                    uint8 temp = arr[i];
+                    arr[i] = arr[j];
+                    arr[j] = temp;
                 }
             }
         }
-        return _arr;
+        return arr;
     }
 
     function pickWinner() internal {
@@ -261,6 +261,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             requestConfig.callbackGasLimit,
             1
         );
+        assert(requestId > 0);
         emit RequestedLottoNumbers(requestId);
     }
 
@@ -291,9 +292,9 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
         }
         if ((block.timestamp - lotto.startDate) > lotto.timeLength) {
             lotto.lottoState = LottoState.STAGED;
-            address[] memory players = new address[](s_players.length);
-            for (uint256 i = 0; i < s_players.length; i++) {
-                players[i] = s_players[i];
+            address[] memory players = new address[](players.length);
+            for (uint256 i = 0; i < players.length; i++) {
+                players[i] = players[i];
             }
             emit LottoStaged(players);
             pickWinner();
