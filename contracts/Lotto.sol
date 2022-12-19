@@ -292,11 +292,11 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
         }
         if ((block.timestamp - lotto.startDate) > lotto.timeLength) {
             lotto.lottoState = LottoState.STAGED;
-            address[] memory players = new address[](players.length);
+            address[] memory _players = new address[](players.length);
             for (uint256 i = 0; i < players.length; i++) {
-                players[i] = players[i];
+                _players[i] = players[i];
             }
-            emit LottoStaged(players);
+            emit LottoStaged(_players);
             pickWinner();
         }
     }

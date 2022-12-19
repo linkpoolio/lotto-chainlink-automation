@@ -3,7 +3,7 @@ name: Hardhat Tests
 on: [push]
 
 jobs:
-  test:
+  contract-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
