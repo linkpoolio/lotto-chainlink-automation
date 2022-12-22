@@ -44,6 +44,7 @@ describe("Lotto", function () {
       requestConfirmations,
       callbackGasLimit,
       keyHash,
+      owner.address,
     ]);
     await vrfCoordinatorV2Mock.addConsumer(subscriptionId, lotto.address);
   });

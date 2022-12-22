@@ -30,14 +30,14 @@ $ git clone git@github.com:linkpoolio/circuit-breaker-chainlink-automation.git
 ```
 # from /root
 $ echo "NETWORK=ganache" >> .env
-$ echo "RPC_URL=\"http://127.0.0.1:7545\"" >> .env
+$ echo "LOCAL_RPC_URL=\"http://127.0.0.1:7545\"" >> .env
 ```
 
 ### 3. Install dependencies.
 
 ```
 # from /root
-$ pnpm install
+$ npm install
 ```
 
 ### 4. Deploy contract
@@ -53,7 +53,7 @@ $ make deploy
 
 ```
 # from /root/ui
-$ pnpm storybook
+$ npm storybook
 ```
 
 ### 2. View app
