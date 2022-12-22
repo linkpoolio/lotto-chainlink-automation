@@ -21,6 +21,7 @@ async function main() {
     networkName.requestConfirmations,
     networkName.callbackGasLimit,
     networkName.keyHash,
+    networkName.keepersRegistry,
   ]);
 
   await lotto.deployed();

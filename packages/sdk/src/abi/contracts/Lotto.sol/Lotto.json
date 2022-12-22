@@ -3,28 +3,33 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "_vrfCoordinator",
+        "name": "vrfCoordinator",
         "type": "address"
       },
       {
         "internalType": "uint64",
-        "name": "_subscriptionId",
+        "name": "subscriptionId",
         "type": "uint64"
       },
       {
         "internalType": "uint16",
-        "name": "_requestConfirmations",
+        "name": "requestConfirmations",
         "type": "uint16"
       },
       {
         "internalType": "uint32",
-        "name": "_callbackGasLimit",
+        "name": "callbackGasLimit",
         "type": "uint32"
       },
       {
         "internalType": "bytes32",
-        "name": "_keyHash",
+        "name": "keyHash",
         "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "keeperAddress",
+        "type": "address"
       }
     ],
     "stateMutability": "nonpayable",
@@ -49,6 +54,11 @@
       }
     ],
     "name": "OnlyCoordinatorCanFulfill",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "OnlyKeeperRegistry",
     "type": "error"
   },
   {
@@ -210,6 +220,19 @@
   },
   {
     "inputs": [],
+    "name": "keeperRegistryAddress",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "lotto",
     "outputs": [
       {
@@ -339,6 +362,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "keeperAddress",
+        "type": "address"
+      }
+    ],
+    "name": "setKeeperRegistryAddress",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   }
 ]

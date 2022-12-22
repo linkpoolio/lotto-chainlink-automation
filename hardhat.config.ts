@@ -4,9 +4,12 @@ import "hardhat-abi-exporter";
 
 require("dotenv").config();
 
-const MAINNET_RPC_URL = process.env.RPC_URL as string;
-const GOERLI_RPC_URL = process.env.RPC_URL as string;
-const GANACHE_RPC_URL = process.env.RPC_URL as string;
+const MAINNET_RPC_URL = process.env.MAINNET_RPC_URL as string;
+const GOERLI_RPC_URL = process.env.MAINNET_RPC_URL as string;
+const BINANCE_MAINNET_RPC_URL = process.env.BINANCE_MAINNET_RPC_URL as string;
+const POLYGON_MAINNET_RPC_URL = process.env.POLYGON_MAINNET_RPC_URL as string;
+const LOCAL_RPC_URL = process.env.RPC_URL as string;
+const PRIVATE_KEY = (process.env.PRIVATE_KEY as string) || "0x";
 
 interface Config extends HardhatUserConfig {
   abiExporter: {
@@ -25,15 +28,35 @@ const config: Config = {
     format: "json",
   },
   networks: {
-    ganache: {
-      url: GANACHE_RPC_URL,
-    },
+    // ganache: {
+    //   url: LOCAL_RPC_URL,
+    // },
     hardhat: {
       gas: 30000000,
       // forking: {
       //   url: MAINNET_RPC_URL,
       // },
     },
+    // mainnet: {
+    //   url: MAINNET_RPC_URL,
+    //   accounts: PRIVATE_KEY !== undefined ? [PRIVATE_KEY] : [],
+    //   chainId: 1,
+    // },
+    // goerli: {
+    //   url: GOERLI_RPC_URL,
+    //   accounts: PRIVATE_KEY !== undefined ? [PRIVATE_KEY] : [],
+    //   chainId: 5,
+    // },
+    // polygon: {
+    //   url: POLYGON_MAINNET_RPC_URL,
+    //   accounts: PRIVATE_KEY !== undefined ? [PRIVATE_KEY] : [],
+    //   chainId: 137,
+    // },
+    // binance: {
+    //   url: BINANCE_MAINNET_RPC_URL,
+    //   accounts: PRIVATE_KEY !== undefined ? [PRIVATE_KEY] : [],
+    //   chainId: 56,
+    // },
   },
 };
 

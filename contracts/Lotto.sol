@@ -18,6 +18,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
     RequestConfig public requestConfig;
     address public owner;
     address payable[] players;
+    address public keeperRegistryAddress;
     mapping(uint256 => address) private randomRequests;
     mapping(address => uint8[]) private tickets;
 
@@ -69,6 +70,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
 
     // ------------------- ERRORS -------------------
     error LottoNotLive();
+    error OnlyKeeperRegistry();
 
     // ------------------- MODIFIERS -------------------
 
@@ -76,23 +78,31 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
         require(msg.sender == owner);
         _;
     }
+    modifier onlyKeeperRegistry() {
+        if (msg.sender != keeperRegistryAddress) {
+            revert OnlyKeeperRegistry();
+        }
+        _;
+    }
 
     constructor(
-        address _vrfCoordinator,
-        uint64 _subscriptionId,
-        uint16 _requestConfirmations,
-        uint32 _callbackGasLimit,
-        bytes32 _keyHash
-    ) VRFConsumerBaseV2(_vrfCoordinator) {
-        COORDINATOR = VRFCoordinatorV2Interface(_vrfCoordinator);
+        address vrfCoordinator,
+        uint64 subscriptionId,
+        uint16 requestConfirmations,
+        uint32 callbackGasLimit,
+        bytes32 keyHash,
+        address keeperAddress
+    ) VRFConsumerBaseV2(vrfCoordinator) {
+        COORDINATOR = VRFCoordinatorV2Interface(vrfCoordinator);
         owner = msg.sender;
         requestConfig = RequestConfig({
-            subscriptionId: _subscriptionId,
-            callbackGasLimit: _callbackGasLimit,
-            requestConfirmations: _requestConfirmations,
+            subscriptionId: subscriptionId,
+            callbackGasLimit: callbackGasLimit,
+            requestConfirmations: requestConfirmations,
             numWords: 1,
-            keyHash: _keyHash
+            keyHash: keyHash
         });
+        setKeeperRegistryAddress(keeperAddress);
     }
 
     /**
@@ -284,7 +294,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
 
     function performUpkeep(
         bytes calldata /* performData */
-    ) external override {
+    ) external override onlyKeeperRegistry {
         if (lotto.lottoState != LottoState.LIVE) {
             return;
         }
@@ -297,5 +307,14 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             emit LottoStaged(_players);
             pickWinner();
         }
+    }
+
+    /**
+     * @notice Sets the keeper registry address.
+     * @param keeperAddress The address of the keeper registry.
+     */
+    function setKeeperRegistryAddress(address keeperAddress) public onlyOwner {
+        require(keeperAddress != address(0));
+        keeperRegistryAddress = keeperAddress;
     }
 }
