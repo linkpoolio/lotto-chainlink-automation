@@ -1,4 +1,4 @@
-# Circuit Breaker | Chainlink Automation
+# Lotto | Chainlink Automation
 
 ## I. About
 
@@ -33,18 +33,18 @@ $ echo "NETWORK=ganache" >> .env
 $ echo "RPC_URL=\"http://127.0.0.1:7545\"" >> .env
 ```
 
-### 3. Deploy contract
+### 3. Install dependencies.
+
+```
+# from /root
+$ pnpm install
+```
+
+### 4. Deploy contract
 
 ```
 # from /root
 $ make deploy
-```
-
-### 4. Install UI dependencies
-
-```
-# from /root/ui
-$ pnpm
 ```
 
 ## IV. Run the App
@@ -53,7 +53,7 @@ $ pnpm
 
 ```
 # from /root/ui
-$ pnpm run storybook
+$ pnpm storybook
 ```
 
 ### 2. View app
