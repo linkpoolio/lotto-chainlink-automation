@@ -1,20 +1,27 @@
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
+import { deploy } from "../test/utils/helpers";
+import { networkConfig } from "../network.config";
 
 async function main() {
-  const Lotto = await ethers.getContractFactory("Lotto");
-  const vrfCoordinatorAddress = "0xdD3782915140c8f3b190B5D67eAc6dc5760C46E9";
-  const subscriptionId = 777;
-  const requestConfirmations = 5;
-  const callbackGasLimit = 1000000;
-  const keyHash =
-    "0x7d2f9b7d7bfa22f8dfba858b341320a2f9b3bebe8b9b8979a9e3b5b5d8d5a1a1";
-  const lotto = await Lotto.deploy(
-    vrfCoordinatorAddress,
-    subscriptionId,
-    requestConfirmations,
-    callbackGasLimit,
-    keyHash
-  );
+  const chainId =
+    network.config.chainId != undefined ? network.config.chainId : 31337;
+
+  const networkName = {
+    name: networkConfig[chainId].name,
+    subscriptionId: networkConfig[chainId].subscriptionId,
+    requestConfirmations: networkConfig[chainId].requestConfirmations,
+    callbackGasLimit: networkConfig[chainId].callbackGasLimit,
+    vrfCoordinatorV2: networkConfig[chainId].vrfCoordinatorV2,
+    keepersRegistry: networkConfig[chainId].keepersRegistry,
+    keyHash: networkConfig[chainId].keyHash,
+  };
+  const lotto = await deploy("Lotto", [
+    networkName.vrfCoordinatorV2,
+    networkName.subscriptionId,
+    networkName.requestConfirmations,
+    networkName.callbackGasLimit,
+    networkName.keyHash,
+  ]);
 
   await lotto.deployed();
 
