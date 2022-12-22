@@ -1,6 +1,7 @@
+-include .env
 
 deploy:
-	npx hardhat run --network localhost scripts/deploy.ts
+	npx hardhat run --network ${NETWORK} scripts/deploy.ts
 
 test-contracts: 
 	npx hardhat test

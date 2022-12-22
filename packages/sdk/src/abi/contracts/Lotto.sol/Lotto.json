@@ -1,0 +1,344 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_vrfCoordinator",
+        "type": "address"
+      },
+      {
+        "internalType": "uint64",
+        "name": "_subscriptionId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint16",
+        "name": "_requestConfirmations",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint32",
+        "name": "_callbackGasLimit",
+        "type": "uint32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "_keyHash",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "LottoNotLive",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "have",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "want",
+        "type": "address"
+      }
+    ],
+    "name": "OnlyCoordinatorCanFulfill",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address[]",
+        "name": "winners",
+        "type": "address[]"
+      }
+    ],
+    "name": "LotteryWinners",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "time",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "fee",
+        "type": "uint256"
+      }
+    ],
+    "name": "LottoCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "player",
+        "type": "address"
+      }
+    ],
+    "name": "LottoEnter",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address[]",
+        "name": "participants",
+        "type": "address[]"
+      }
+    ],
+    "name": "LottoStaged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      }
+    ],
+    "name": "RequestedLottoNumbers",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint8[]",
+        "name": "numbers",
+        "type": "uint8[]"
+      }
+    ],
+    "name": "WinningLotteryNumbers",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "name": "checkUpkeep",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "upkeepNeeded",
+        "type": "bool"
+      },
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "timeLength",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "fee",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "untilWon",
+        "type": "bool"
+      }
+    ],
+    "name": "createLotto",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8[]",
+        "name": "numbers",
+        "type": "uint8[]"
+      }
+    ],
+    "name": "enterLotto",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getWinners",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lotto",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "startDate",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum Lotto.LottoState",
+        "name": "lottoState",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "prizeWorth",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "lottoOwner",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timeLength",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "fee",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "untilWon",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lottoCounter",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "_value",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "name": "performUpkeep",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "randomWords",
+        "type": "uint256[]"
+      }
+    ],
+    "name": "rawFulfillRandomWords",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "requestConfig",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "subscriptionId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint32",
+        "name": "callbackGasLimit",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint16",
+        "name": "requestConfirmations",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint32",
+        "name": "numWords",
+        "type": "uint32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "keyHash",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
