@@ -1,4 +1,4 @@
-const parseNumbers = (numbers: string): number[] => {
+export const parseNumbers = (numbers: string): number[] => {
   try {
     const numbersArray = JSON.parse(numbers);
     if (!Array.isArray(numbersArray)) {
@@ -10,7 +10,7 @@ const parseNumbers = (numbers: string): number[] => {
   }
 };
 
-const parseFee = (fee: string): number => {
+export const parseFee = (fee: string): number => {
   const feeNumber = Number(fee);
   if (isNaN(feeNumber)) {
     throw new Error(`The parameter fee: ${fee} is not a number`);

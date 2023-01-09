@@ -1,4 +1,6 @@
-export const getWinners = async (contract: any): Promise<string[]> => {
+export const getWinners = async (
+  contract: any
+): Promise<string[]> => {
   try {
     const winners = await contract.getWinners();
     if (winners.length === 0) {

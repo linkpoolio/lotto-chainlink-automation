@@ -1,4 +1,4 @@
-const parseTimeLength = (timeLength: string): number => {
+export const parseTimeLength = (timeLength: string): number => {
   const timeLengthNumber = Number(timeLength);
   if (isNaN(timeLengthNumber)) {
     throw new Error(`The parameter timeLength: ${timeLength} is not a number`);
@@ -6,7 +6,7 @@ const parseTimeLength = (timeLength: string): number => {
   return timeLengthNumber;
 };
 
-const parseFee = (fee: string): number => {
+export const parseFee = (fee: string): number => {
   const feeNumber = Number(fee);
   if (isNaN(feeNumber)) {
     throw new Error(`The parameter fee: ${fee} is not a number`);
@@ -14,7 +14,7 @@ const parseFee = (fee: string): number => {
   return feeNumber;
 };
 
-const parseUntilWon = (untilWon: string): boolean => {
+export const parseUntilWon = (untilWon: string): boolean => {
   const untilWonBoolean = JSON.parse(untilWon);
   if (typeof untilWonBoolean !== "boolean") {
     throw new Error(`The parameter untilWon: ${untilWon} is not a boolean`);
