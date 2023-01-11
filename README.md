@@ -22,7 +22,7 @@ The Lotto contract is a highly configurable proof of concept that can be used wi
 ### 1. Clone repo
 
 ```
-$ git clone git@github.com:linkpoolio/circuit-breaker-chainlink-automation.git
+$ git clone git@github.com:linkpoolio/lotto-chainlink-automation.git
 ```
 
 ### 2. Setup .env file
