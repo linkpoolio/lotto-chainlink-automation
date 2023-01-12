@@ -185,6 +185,11 @@
         "internalType": "bool",
         "name": "untilWon",
         "type": "bool"
+      },
+      {
+        "internalType": "address",
+        "name": "feeToken",
+        "type": "address"
       }
     ],
     "name": "createLotto",
@@ -269,6 +274,16 @@
         "internalType": "bool",
         "name": "untilWon",
         "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "feeToken",
+        "type": "bool"
+      },
+      {
+        "internalType": "address",
+        "name": "feeTokenAddress",
+        "type": "address"
       }
     ],
     "stateMutability": "view",
