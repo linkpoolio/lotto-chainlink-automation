@@ -9,13 +9,14 @@ enum LottoState {
   live,
   finished,
 }
-
+const zeroAddress = ethers.constants.AddressZero;
 describe("Lotto", function () {
   let owner: any,
     subscriptionId: any,
     requestConfirmations: any,
     callbackGasLimit: any,
     keyHash: any,
+    erc20WETHMock: any,
     vrfCoordinatorV2Mock: any;
   let lotto: any;
   beforeEach(async () => {
@@ -31,6 +32,7 @@ describe("Lotto", function () {
       BASE_FEE,
       GAS_PRICE_LINK,
     ]);
+    erc20WETHMock = await deploy("ERC20Mock", ["Wrapped ETH", "WETH"]);
     const tx = await vrfCoordinatorV2Mock.createSubscription();
     let txReceipt = await tx.wait(1);
     subscriptionId = txReceipt.events[0].args.subId;
@@ -65,7 +67,7 @@ describe("Lotto", function () {
       );
     });
     it("Should revert, not enough numbers to enter", async function () {
-      await expect(lotto.createLotto(100000, 10, false)).to.emit(
+      await expect(lotto.createLotto(100000, 10, false, zeroAddress)).to.emit(
         lotto,
         "LottoCreated"
       );
@@ -74,7 +76,7 @@ describe("Lotto", function () {
       ).to.be.revertedWith("not enough numbers");
     });
     it("Should revert, numbers not lower than 100", async function () {
-      await expect(lotto.createLotto(100000, 10, false)).to.emit(
+      await expect(lotto.createLotto(100000, 10, false, zeroAddress)).to.emit(
         lotto,
         "LottoCreated"
       );
@@ -83,7 +85,7 @@ describe("Lotto", function () {
       ).to.be.revertedWith("Number must be between 1 and 100");
     });
     it("Should enter with user picked numbers", async function () {
-      await expect(lotto.createLotto(100000, 10, false)).to.emit(
+      await expect(lotto.createLotto(100000, 10, false, zeroAddress)).to.emit(
         lotto,
         "LottoCreated"
       );
@@ -110,7 +112,7 @@ describe("Lotto", function () {
       assert(tx);
     });
     it("emits correct event on performUpkeep", async () => {
-      await lotto.createLotto(100000, 10, false);
+      await lotto.createLotto(100000, 10, false, zeroAddress);
       await network.provider.send("evm_increaseTime", [100000000]);
       await network.provider.request({ method: "evm_mine", params: [] });
       await expect(lotto.performUpkeep("0x")).to.emit(lotto, "LottoStaged");
@@ -142,7 +144,7 @@ describe("Lotto", function () {
       ).to.be.revertedWith("nonexistent request");
     });
     it("runs vrf after lotto is done with no winner", async () => {
-      await lotto.createLotto(100000, 10, false);
+      await lotto.createLotto(100000, 10, false, zeroAddress);
       await lotto.enterLotto([4, 40, 34, 1, 20, 60], { value: 1000 });
       await network.provider.send("evm_increaseTime", [100000000]);
       await network.provider.request({ method: "evm_mine", params: [] });
@@ -157,7 +159,7 @@ describe("Lotto", function () {
       assert(state == LottoState.live);
     });
     it("runs vrf after lotto is done with picking winners", async () => {
-      await lotto.createLotto(100000, 10, false);
+      await lotto.createLotto(100000, 10, false, zeroAddress);
       await lotto.enterLotto([27, 28, 34, 75, 77, 94], { value: 1000 }); // winning numbers
       await network.provider.send("evm_increaseTime", [100000000]);
       await network.provider.request({ method: "evm_mine", params: [] });
@@ -170,6 +172,39 @@ describe("Lotto", function () {
       assert(winners.length == 1);
       const state = (await lotto.lotto()).lottoState;
       assert(state == LottoState.finished);
+    });
+  });
+
+  describe("Using tokens for fees", function () {
+    it("create lotto with fee token", async () => {
+      await lotto.createLotto(100000, 10, false, erc20WETHMock.address);
+      const currentLotto = await lotto.lotto();
+      assert(currentLotto.feeTokenAddress == erc20WETHMock.address);
+    });
+    it("enter lotto that requires a fee token", async () => {
+      await lotto.createLotto(100000, 10, false, erc20WETHMock.address);
+      await erc20WETHMock.approve(lotto.address, 1000);
+      await lotto.enterLotto([27, 28, 34, 75, 77, 94]);
+    });
+    it("sends fee tokens to winner of lotto", async () => {
+      await lotto.createLotto(100000, 10, false, erc20WETHMock.address);
+      await erc20WETHMock.approve(lotto.address, 1000);
+      await lotto.enterLotto([27, 28, 34, 75, 77, 94]); // winning numbers
+      const beforeBalance = await erc20WETHMock.balanceOf(owner.address);
+      await network.provider.send("evm_increaseTime", [100000000]);
+      await network.provider.request({ method: "evm_mine", params: [] });
+      let tx = await lotto.performUpkeep("0x");
+      await tx.wait(1);
+      tx = await vrfCoordinatorV2Mock.fulfillRandomWords(1, lotto.address);
+      await tx.wait(1);
+      await expect(tx).to.emit(lotto, "WinningLotteryNumbers");
+      const winners = await lotto.getWinners();
+      assert(winners.length == 1);
+      const state = (await lotto.lotto()).lottoState;
+      assert(state == LottoState.finished);
+      const afterBalance = await erc20WETHMock.balanceOf(owner.address);
+      assert(beforeBalance.toString() == "99999999999999999999999990");
+      assert(afterBalance.toString() == "100000000000000000000000000");
     });
   });
 });

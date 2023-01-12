@@ -1,17 +1,23 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
+
 import "@chainlink/contracts/src/v0.8/AutomationCompatible.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/interfaces/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title Lotto
  * @notice Creates a lotto with a set of numbers and a prize
  * @dev numbers are set > 0 and <= 100
  */
+
 contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
+    using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
+
     VRFCoordinatorV2Interface COORDINATOR;
     Counters.Counter public lottoCounter;
     LottoInstance public lotto;
@@ -40,6 +46,8 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
         uint256 timeLength;
         uint256 fee;
         bool untilWon;
+        bool feeToken;
+        address feeTokenAddress;
     }
 
     struct Participant {
@@ -78,6 +86,7 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
         require(msg.sender == owner);
         _;
     }
+
     modifier onlyKeeperRegistry() {
         if (msg.sender != keeperRegistryAddress) {
             revert OnlyKeeperRegistry();
@@ -110,14 +119,17 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
      * @param timeLength length of the lottery
      * @param fee fee to enter the lottery
      * @param untilWon if the lottery will be finished when a winner is found
-     **/
-    function createLotto(
-        uint256 timeLength,
-        uint256 fee,
-        bool untilWon
-    ) external onlyOwner {
+     * @param feeToken address of the token to be used as fee. If 0x0, Gas token will be used
+     *
+     */
+    function createLotto(uint256 timeLength, uint256 fee, bool untilWon, address feeToken) external onlyOwner {
+        bool _feeToken = false;
+        address _feeTokenAddress = address(0);
+        if (feeToken != address(0)) {
+            _feeToken = true;
+            _feeTokenAddress = feeToken;
+        }
         lottoCounter.increment();
-
         LottoInstance memory newLotto = LottoInstance({
             contestantsAddresses: new address[](0),
             winners: new address[](0),
@@ -127,7 +139,9 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             lottoOwner: msg.sender,
             timeLength: timeLength,
             fee: fee,
-            untilWon: untilWon
+            untilWon: untilWon,
+            feeToken: _feeToken,
+            feeTokenAddress: _feeTokenAddress
         });
 
         lotto = newLotto;
@@ -138,15 +152,18 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
      * @notice withdraws rewards for an account
      * @param numbers numbers chosen by the player
      * @dev empty array will trigger a random number generation
-     **/
+     *
+     */
     function enterLotto(uint8[] memory numbers) external payable {
         if (lotto.lottoState != LottoState.LIVE) {
             revert LottoNotLive();
         }
-        require(
-            msg.value >= lotto.fee,
-            "You need to pay the fee to enter the lotto"
-        );
+        if (!lotto.feeToken) {
+            require(msg.value >= lotto.fee, "You need to pay the fee to enter the lotto");
+        } else {
+            IERC20 token = IERC20(lotto.feeTokenAddress);
+            token.safeTransferFrom(msg.sender, address(this), lotto.fee);
+        }
         if (numbers.length == 0) {
             uint256 requestId = COORDINATOR.requestRandomWords(
                 requestConfig.keyHash,
@@ -165,7 +182,11 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             players.push(payable(msg.sender));
             tickets[msg.sender] = _sortArray(numbers);
         }
-        lotto.prizeWorth += msg.value;
+        if (!lotto.feeToken) {
+            lotto.prizeWorth += msg.value;
+        } else {
+            lotto.prizeWorth += lotto.fee;
+        }
         lotto.contestantsAddresses.push(msg.sender);
         emit LottoEnter(msg.sender);
     }
@@ -174,11 +195,9 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
      * @notice creates random numbers from VRF request
      * @dev if lotto state is live, it will create random numbers for the player
      * @dev if lotto state is staged, it will pick winners
-     **/
-    function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords)
-        internal
-        override
-    {
+     *
+     */
+    function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override {
         uint256 randomNumber = randomWords[0];
         if (lotto.lottoState == LottoState.LIVE) {
             address a = randomRequests[requestId];
@@ -201,9 +220,17 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             }
             if (lotto.winners.length > 0) {
                 uint256 prize = lotto.prizeWorth / lotto.winners.length;
-                for (uint256 i = 0; i < lotto.winners.length; i++) {
-                    address payable winner = payable(lotto.winners[i]);
-                    winner.transfer(prize);
+                if (lotto.feeToken) {
+                    IERC20 token = IERC20(lotto.feeTokenAddress);
+                    for (uint256 i = 0; i < lotto.winners.length; i++) {
+                        address winner = lotto.winners[i];
+                        token.safeTransfer(winner, prize);
+                    }
+                } else {
+                    for (uint256 i = 0; i < lotto.winners.length; i++) {
+                        address payable winner = payable(lotto.winners[i]);
+                        winner.transfer(prize);
+                    }
                 }
                 lotto.lottoState = LottoState.FINISHED;
                 emit LotteryWinners(lotto.winners);
@@ -216,7 +243,8 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
 
     /**
      * @notice gets the winners of the lotto
-     **/
+     *
+     */
     function getWinners() external view returns (address[] memory) {
         return lotto.winners;
     }
@@ -225,12 +253,9 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
      * @notice withdraws rewards for an account
      * @param randomValue random value generated by VRF
      * @param amount amount of numbers to generate
-     **/
-    function _createRandom(uint256 randomValue, uint256 amount)
-        internal
-        pure
-        returns (uint8[] memory expandedValues)
-    {
+     *
+     */
+    function _createRandom(uint256 randomValue, uint256 amount) internal pure returns (uint8[] memory expandedValues) {
         expandedValues = new uint8[](amount);
         for (uint256 i = 0; i < amount; i++) {
             uint256 v = uint256(keccak256(abi.encode(randomValue, i)));
@@ -243,12 +268,9 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
      * @notice sorts array of numbers
      * @param arr sorts list of numbers
      * @dev used to pick winner with less state changes
-     **/
-    function _sortArray(uint8[] memory arr)
-        internal
-        pure
-        returns (uint8[] memory)
-    {
+     *
+     */
+    function _sortArray(uint8[] memory arr) internal pure returns (uint8[] memory) {
         for (uint256 i = 0; i < arr.length; i++) {
             for (uint256 j = i + 1; j < arr.length; j++) {
                 if (arr[i] > arr[j]) {
@@ -273,28 +295,20 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
         emit RequestedLottoNumbers(requestId);
     }
 
-    function checkUpkeep(
-        bytes calldata /* checkData */
-    )
+    function checkUpkeep(bytes calldata /* checkData */ )
         external
         view
         override
-        returns (
-            bool upkeepNeeded,
-            bytes memory /* performData */
-        )
+        returns (bool upkeepNeeded, bytes memory /* performData */ )
     {
         if (lotto.lottoState != LottoState.LIVE) {
             upkeepNeeded = false;
         } else {
-            upkeepNeeded =
-                (block.timestamp - lotto.startDate) > lotto.timeLength;
+            upkeepNeeded = (block.timestamp - lotto.startDate) > lotto.timeLength;
         }
     }
 
-    function performUpkeep(
-        bytes calldata /* performData */
-    ) external override onlyKeeperRegistry {
+    function performUpkeep(bytes calldata /* performData */ ) external override onlyKeeperRegistry {
         if (lotto.lottoState != LottoState.LIVE) {
             return;
         }
