@@ -45,7 +45,6 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
         address lottoOwner;
         uint256 timeLength;
         uint256 fee;
-        bool untilWon;
         bool feeToken;
         address feeTokenAddress;
     }
@@ -139,7 +138,6 @@ contract Lotto is VRFConsumerBaseV2, AutomationCompatibleInterface {
             lottoOwner: msg.sender,
             timeLength: timeLength,
             fee: fee,
-            untilWon: untilWon,
             feeToken: _feeToken,
             feeTokenAddress: _feeTokenAddress
         });
